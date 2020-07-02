@@ -43,6 +43,16 @@ typedef double FFT_SCALAR;
 #define MPI_FFT_SCALAR MPI_DOUBLE
 #endif
 
+#ifdef FFT_HEFFTE
+#include "heffte.h"
+
+#ifdef FFT_FFTW3
+using heffte_class = heffte::fft3d<heffte::backend::fftw>;
+#else
+using heffte_class = heffte::fft3d<heffte::backend::mkl>;
+#endif
+#endif
+
 namespace LAMMPS_NS {
 
 class PPPM : public KSpace {
@@ -102,7 +112,11 @@ class PPPM : public KSpace {
   FFT_SCALAR ***density_A_brick,***density_B_brick;
   FFT_SCALAR *density_A_fft,*density_B_fft;
 
+  #ifdef FFT_HEFFTE
+  heffte_class *fft1, *fft2;
+  #else
   class FFT3d *fft1,*fft2;
+  #endif
   class Remap *remap;
   class GridComm *cg;
   class GridComm *cg_peratom;

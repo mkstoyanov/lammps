@@ -803,6 +803,18 @@ void PPPM::allocate()
   // 2nd FFT returns data in 3d brick decomposition
   // remap takes data from 3d brick to FFT decomposition
 
+  #ifdef FFT_HEFFTE
+  heffte::plan_options options = heffte::default_options<heffte::backend::fftw>();
+  options.use_reorder  = true;  // data is transposed; if false, strided functionality is used
+  options.use_pencils  = true;  // use pencil reshape logic; if false, slab reshapes are performed
+  options.use_alltoall = (collective_flag != 0);
+
+  fft1 = new heffte_class ( heffte::box3d({nxlo_fft, nylo_fft, nzlo_fft}, {nxhi_fft, nyhi_fft, nzhi_fft}),
+                            heffte::box3d({nxlo_fft, nylo_fft, nzlo_fft}, {nxhi_fft, nyhi_fft, nzhi_fft}), world, options );
+
+  fft2 = new heffte_class ( heffte::box3d({nxlo_fft, nylo_fft, nzlo_fft}, {nxhi_fft, nyhi_fft, nzhi_fft}),
+                            heffte::box3d({nxlo_in, nylo_in, nzlo_in}, {nxhi_in, nyhi_in, nzhi_in}), world, options );
+  #else
   int tmp;
 
   fft1 = new FFT3d(lmp,world,nx_pppm,ny_pppm,nz_pppm,
@@ -814,6 +826,7 @@ void PPPM::allocate()
                    nxlo_fft,nxhi_fft,nylo_fft,nyhi_fft,nzlo_fft,nzhi_fft,
                    nxlo_in,nxhi_in,nylo_in,nyhi_in,nzlo_in,nzhi_in,
                    0,0,&tmp,collective_flag);
+  #endif
 
   remap = new Remap(lmp,world,
                     nxlo_in,nxhi_in,nylo_in,nyhi_in,nzlo_in,nzhi_in,
@@ -2013,6 +2026,10 @@ void PPPM::poisson_ik()
 
   // transform charge density (r -> k)
 
+  #ifdef FFT_HEFFTE
+  fft1->forward(density_fft, reinterpret_cast<std::complex<double>*>(work1));
+  #else
+
   n = 0;
   for (i = 0; i < nfft; i++) {
     work1[n++] = density_fft[i];
@@ -2020,6 +2037,7 @@ void PPPM::poisson_ik()
   }
 
   fft1->compute(work1,work1,1);
+  #endif
 
   // global energy and virial contribution
 
@@ -2080,7 +2098,11 @@ void PPPM::poisson_ik()
         n += 2;
       }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work2), reinterpret_cast<std::complex<double>*>(work2), heffte::scale::none);
+  #else
   fft2->compute(work2,work2,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -2101,7 +2123,11 @@ void PPPM::poisson_ik()
         n += 2;
       }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work2), reinterpret_cast<std::complex<double>*>(work2), heffte::scale::none);
+  #else
   fft2->compute(work2,work2,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -2122,7 +2148,11 @@ void PPPM::poisson_ik()
         n += 2;
       }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work2), reinterpret_cast<std::complex<double>*>(work2), heffte::scale::none);
+  #else
   fft2->compute(work2,work2,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -2154,7 +2184,11 @@ void PPPM::poisson_ik_triclinic()
     n += 2;
   }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work2), reinterpret_cast<std::complex<double>*>(work2), heffte::scale::none);
+  #else
   fft2->compute(work2,work2,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -2173,7 +2207,11 @@ void PPPM::poisson_ik_triclinic()
     n += 2;
   }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work2), reinterpret_cast<std::complex<double>*>(work2), heffte::scale::none);
+  #else
   fft2->compute(work2,work2,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -2192,7 +2230,11 @@ void PPPM::poisson_ik_triclinic()
     n += 2;
   }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work2), reinterpret_cast<std::complex<double>*>(work2), heffte::scale::none);
+  #else
   fft2->compute(work2,work2,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -2214,6 +2256,9 @@ void PPPM::poisson_ad()
 
   // transform charge density (r -> k)
 
+  #ifdef FFT_HEFFTE
+  fft1->forward(density_fft, reinterpret_cast<std::complex<double>*>(work1));
+  #else
   n = 0;
   for (i = 0; i < nfft; i++) {
     work1[n++] = density_fft[i];
@@ -2221,6 +2266,7 @@ void PPPM::poisson_ad()
   }
 
   fft1->compute(work1,work1,1);
+  #endif
 
   // global energy and virial contribution
 
@@ -2266,7 +2312,11 @@ void PPPM::poisson_ad()
     n += 2;
   }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work2), reinterpret_cast<std::complex<double>*>(work2), heffte::scale::none);
+  #else
   fft2->compute(work2,work2,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -2295,7 +2345,11 @@ void PPPM::poisson_peratom()
       n += 2;
     }
 
+    #ifdef FFT_HEFFTE
+    fft2->backward(reinterpret_cast<std::complex<double>*>(work2), reinterpret_cast<std::complex<double>*>(work2), heffte::scale::none);
+    #else
     fft2->compute(work2,work2,-1);
+    #endif
 
     n = 0;
     for (k = nzlo_in; k <= nzhi_in; k++)
@@ -2317,7 +2371,11 @@ void PPPM::poisson_peratom()
     n += 2;
   }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work2), reinterpret_cast<std::complex<double>*>(work2), heffte::scale::none);
+  #else
   fft2->compute(work2,work2,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -2334,7 +2392,11 @@ void PPPM::poisson_peratom()
     n += 2;
   }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work2), reinterpret_cast<std::complex<double>*>(work2), heffte::scale::none);
+  #else
   fft2->compute(work2,work2,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -2351,7 +2413,11 @@ void PPPM::poisson_peratom()
     n += 2;
   }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work2), reinterpret_cast<std::complex<double>*>(work2), heffte::scale::none);
+  #else
   fft2->compute(work2,work2,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -2368,7 +2434,11 @@ void PPPM::poisson_peratom()
     n += 2;
   }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work2), reinterpret_cast<std::complex<double>*>(work2), heffte::scale::none);
+  #else
   fft2->compute(work2,work2,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -2385,7 +2455,11 @@ void PPPM::poisson_peratom()
     n += 2;
   }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work2), reinterpret_cast<std::complex<double>*>(work2), heffte::scale::none);
+  #else
   fft2->compute(work2,work2,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -2402,7 +2476,11 @@ void PPPM::poisson_peratom()
     n += 2;
   }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work2), reinterpret_cast<std::complex<double>*>(work2), heffte::scale::none);
+  #else
   fft2->compute(work2,work2,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -3002,6 +3080,8 @@ int PPPM::timing_1d(int n, double &time1d)
   MPI_Barrier(world);
   time1 = MPI_Wtime();
 
+  #ifdef FFT_HEFFTE
+  #else
   for (int i = 0; i < n; i++) {
     fft1->timing1d(work1,nfft_both,1);
     fft2->timing1d(work1,nfft_both,-1);
@@ -3010,6 +3090,7 @@ int PPPM::timing_1d(int n, double &time1d)
       fft2->timing1d(work1,nfft_both,-1);
     }
   }
+  #endif
 
   MPI_Barrier(world);
   time2 = MPI_Wtime();
@@ -3032,6 +3113,16 @@ int PPPM::timing_3d(int n, double &time3d)
   MPI_Barrier(world);
   time1 = MPI_Wtime();
 
+  #ifdef FFT_HEFFTE
+  for (int i = 0; i < n; i++) {
+    fft1->forward(reinterpret_cast<std::complex<double>*>(work1),reinterpret_cast<std::complex<double>*>(work1),heffte::scale::none);
+    fft2->backward(reinterpret_cast<std::complex<double>*>(work1),reinterpret_cast<std::complex<double>*>(work1),heffte::scale::none);
+    if (differentiation_flag != 1) {
+      fft2->backward(reinterpret_cast<std::complex<double>*>(work1),reinterpret_cast<std::complex<double>*>(work1),heffte::scale::none);
+      fft2->backward(reinterpret_cast<std::complex<double>*>(work1),reinterpret_cast<std::complex<double>*>(work1),heffte::scale::none);
+    }
+  }
+  #else
   for (int i = 0; i < n; i++) {
     fft1->compute(work1,work1,1);
     fft2->compute(work1,work1,-1);
@@ -3040,6 +3131,7 @@ int PPPM::timing_3d(int n, double &time3d)
       fft2->compute(work1,work1,-1);
     }
   }
+  #endif
 
   MPI_Barrier(world);
   time2 = MPI_Wtime();
@@ -3302,6 +3394,10 @@ void PPPM::poisson_groups(int AA_flag)
 
   // group A
 
+  #ifdef FFT_HEFFTE
+  fft1->forward(density_A_fft, reinterpret_cast<std::complex<double>*>(work_A), heffte::scale::none);
+  fft1->forward(density_B_fft, reinterpret_cast<std::complex<double>*>(work_B), heffte::scale::none);
+  #else
   n = 0;
   for (i = 0; i < nfft; i++) {
     work_A[n++] = density_A_fft[i];
@@ -3319,6 +3415,7 @@ void PPPM::poisson_groups(int AA_flag)
   }
 
   fft1->compute(work_B,work_B,1);
+  #endif
 
   // group-group energy and force contribution,
   //  keep everything in reciprocal space so

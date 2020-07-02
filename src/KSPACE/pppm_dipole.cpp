@@ -601,6 +601,18 @@ void PPPMDipole::allocate()
   // 2nd FFT returns data in 3d brick decomposition
   // remap takes data from 3d brick to FFT decomposition
 
+  #ifdef FFT_HEFFTE
+  heffte::plan_options options = heffte::default_options<heffte::backend::fftw>();
+  options.use_reorder  = true;  // data is transposed; if false, strided functionality is used
+  options.use_pencils  = true;  // use pencil reshape logic; if false, slab reshapes are performed
+  options.use_alltoall = (collective_flag != 0);
+
+  fft1 = new heffte_class (heffte::box3d({nxlo_fft, nylo_fft, nzlo_fft}, {nxhi_fft, nyhi_fft, nzhi_fft}),
+                           heffte::box3d({nxlo_fft, nylo_fft, nzlo_fft}, {nxhi_fft, nyhi_fft, nzhi_fft}), world, options );
+
+  fft2 = new heffte_class (heffte::box3d({nxlo_fft, nylo_fft, nzlo_fft}, {nxhi_fft, nyhi_fft, nzhi_fft}),
+                           heffte::box3d({nxlo_in, nylo_in, nzlo_in}, {nxhi_in, nyhi_in, nzhi_in}), world, options );
+  #else
   int tmp;
 
   fft1 = new FFT3d(lmp,world,nx_pppm,ny_pppm,nz_pppm,
@@ -612,6 +624,7 @@ void PPPMDipole::allocate()
                    nxlo_fft,nxhi_fft,nylo_fft,nyhi_fft,nzlo_fft,nzhi_fft,
                    nxlo_in,nxhi_in,nylo_in,nyhi_in,nzlo_in,nzhi_in,
                    0,0,&tmp,collective_flag);
+  #endif
 
   remap = new Remap(lmp,world,
                     nxlo_in,nxhi_in,nylo_in,nyhi_in,nzlo_in,nzhi_in,
@@ -1313,6 +1326,12 @@ void PPPMDipole::poisson_ik_dipole()
 
   // transform dipole density (r -> k)
 
+  #ifdef FFT_HEFFTE
+  fft1->forward(densityx_fft_dipole, reinterpret_cast<std::complex<double>*>(work1), heffte::scale::none);
+  fft1->forward(densityy_fft_dipole, reinterpret_cast<std::complex<double>*>(work2), heffte::scale::none);
+  fft1->forward(densityz_fft_dipole, reinterpret_cast<std::complex<double>*>(work3), heffte::scale::none);
+  #else
+
   n = 0;
   for (i = 0; i < nfft; i++) {
     work1[n] = densityx_fft_dipole[i];
@@ -1327,6 +1346,7 @@ void PPPMDipole::poisson_ik_dipole()
   fft1->compute(work1,work1,1);
   fft1->compute(work2,work2,1);
   fft1->compute(work3,work3,1);
+  #endif
 
   // global energy and virial contribution
 
@@ -1402,7 +1422,11 @@ void PPPMDipole::poisson_ik_dipole()
         n += 2;
       }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work4), reinterpret_cast<std::complex<double>*>(work4), heffte::scale::none);
+  #else
   fft2->compute(work4,work4,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -1423,7 +1447,11 @@ void PPPMDipole::poisson_ik_dipole()
         n += 2;
       }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work4), reinterpret_cast<std::complex<double>*>(work4), heffte::scale::none);
+  #else
   fft2->compute(work4,work4,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -1444,7 +1472,11 @@ void PPPMDipole::poisson_ik_dipole()
         n += 2;
       }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work4), reinterpret_cast<std::complex<double>*>(work4), heffte::scale::none);
+  #else
   fft2->compute(work4,work4,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -1465,7 +1497,11 @@ void PPPMDipole::poisson_ik_dipole()
         n += 2;
       }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work4), reinterpret_cast<std::complex<double>*>(work4), heffte::scale::none);
+  #else
   fft2->compute(work4,work4,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -1486,7 +1522,11 @@ void PPPMDipole::poisson_ik_dipole()
         n += 2;
       }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work4), reinterpret_cast<std::complex<double>*>(work4), heffte::scale::none);
+  #else
   fft2->compute(work4,work4,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -1507,7 +1547,11 @@ void PPPMDipole::poisson_ik_dipole()
         n += 2;
       }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work4), reinterpret_cast<std::complex<double>*>(work4), heffte::scale::none);
+  #else
   fft2->compute(work4,work4,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -1528,7 +1572,11 @@ void PPPMDipole::poisson_ik_dipole()
         n += 2;
       }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work4), reinterpret_cast<std::complex<double>*>(work4), heffte::scale::none);
+  #else
   fft2->compute(work4,work4,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -1549,7 +1597,11 @@ void PPPMDipole::poisson_ik_dipole()
         n += 2;
       }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work4), reinterpret_cast<std::complex<double>*>(work4), heffte::scale::none);
+  #else
   fft2->compute(work4,work4,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -1570,7 +1622,11 @@ void PPPMDipole::poisson_ik_dipole()
         n += 2;
       }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work4), reinterpret_cast<std::complex<double>*>(work4), heffte::scale::none);
+  #else
   fft2->compute(work4,work4,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -1606,7 +1662,11 @@ void PPPMDipole::poisson_peratom_dipole()
         ii++;
       }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work4), reinterpret_cast<std::complex<double>*>(work4), heffte::scale::none);
+  #else
   fft2->compute(work4,work4,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -1629,7 +1689,11 @@ void PPPMDipole::poisson_peratom_dipole()
         ii++;
       }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work4), reinterpret_cast<std::complex<double>*>(work4), heffte::scale::none);
+  #else
   fft2->compute(work4,work4,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -1652,7 +1716,11 @@ void PPPMDipole::poisson_peratom_dipole()
         ii++;
       }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work4), reinterpret_cast<std::complex<double>*>(work4), heffte::scale::none);
+  #else
   fft2->compute(work4,work4,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -1675,7 +1743,11 @@ void PPPMDipole::poisson_peratom_dipole()
         ii++;
       }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work4), reinterpret_cast<std::complex<double>*>(work4), heffte::scale::none);
+  #else
   fft2->compute(work4,work4,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -1698,7 +1770,11 @@ void PPPMDipole::poisson_peratom_dipole()
         ii++;
       }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work4), reinterpret_cast<std::complex<double>*>(work4), heffte::scale::none);
+  #else
   fft2->compute(work4,work4,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -1721,7 +1797,11 @@ void PPPMDipole::poisson_peratom_dipole()
         ii++;
       }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work4), reinterpret_cast<std::complex<double>*>(work4), heffte::scale::none);
+  #else
   fft2->compute(work4,work4,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -1744,7 +1824,11 @@ void PPPMDipole::poisson_peratom_dipole()
         ii++;
       }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work4), reinterpret_cast<std::complex<double>*>(work4), heffte::scale::none);
+  #else
   fft2->compute(work4,work4,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -1767,7 +1851,11 @@ void PPPMDipole::poisson_peratom_dipole()
         ii++;
       }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work4), reinterpret_cast<std::complex<double>*>(work4), heffte::scale::none);
+  #else
   fft2->compute(work4,work4,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -1790,7 +1878,11 @@ void PPPMDipole::poisson_peratom_dipole()
         ii++;
       }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work4), reinterpret_cast<std::complex<double>*>(work4), heffte::scale::none);
+  #else
   fft2->compute(work4,work4,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -1813,7 +1905,11 @@ void PPPMDipole::poisson_peratom_dipole()
         ii++;
       }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work4), reinterpret_cast<std::complex<double>*>(work4), heffte::scale::none);
+  #else
   fft2->compute(work4,work4,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -1836,7 +1932,11 @@ void PPPMDipole::poisson_peratom_dipole()
         ii++;
       }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work4), reinterpret_cast<std::complex<double>*>(work4), heffte::scale::none);
+  #else
   fft2->compute(work4,work4,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -1859,7 +1959,11 @@ void PPPMDipole::poisson_peratom_dipole()
         ii++;
       }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work4), reinterpret_cast<std::complex<double>*>(work4), heffte::scale::none);
+  #else
   fft2->compute(work4,work4,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -1882,7 +1986,11 @@ void PPPMDipole::poisson_peratom_dipole()
         ii++;
       }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work4), reinterpret_cast<std::complex<double>*>(work4), heffte::scale::none);
+  #else
   fft2->compute(work4,work4,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -1905,7 +2013,11 @@ void PPPMDipole::poisson_peratom_dipole()
         ii++;
       }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work4), reinterpret_cast<std::complex<double>*>(work4), heffte::scale::none);
+  #else
   fft2->compute(work4,work4,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -1928,7 +2040,11 @@ void PPPMDipole::poisson_peratom_dipole()
         ii++;
       }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work4), reinterpret_cast<std::complex<double>*>(work4), heffte::scale::none);
+  #else
   fft2->compute(work4,work4,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -1951,7 +2067,11 @@ void PPPMDipole::poisson_peratom_dipole()
         ii++;
       }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work4), reinterpret_cast<std::complex<double>*>(work4), heffte::scale::none);
+  #else
   fft2->compute(work4,work4,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -1974,7 +2094,11 @@ void PPPMDipole::poisson_peratom_dipole()
         ii++;
       }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work4), reinterpret_cast<std::complex<double>*>(work4), heffte::scale::none);
+  #else
   fft2->compute(work4,work4,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -1997,7 +2121,11 @@ void PPPMDipole::poisson_peratom_dipole()
         ii++;
       }
 
+  #ifdef FFT_HEFFTE
+  fft2->backward(reinterpret_cast<std::complex<double>*>(work4), reinterpret_cast<std::complex<double>*>(work4), heffte::scale::none);
+  #else
   fft2->compute(work4,work4,-1);
+  #endif
 
   n = 0;
   for (k = nzlo_in; k <= nzhi_in; k++)
@@ -2420,6 +2548,8 @@ int PPPMDipole::timing_1d(int n, double &time1d)
   MPI_Barrier(world);
   time1 = MPI_Wtime();
 
+  #ifdef FFT_HEFFTE
+  #else
   for (int i = 0; i < n; i++) {
     fft1->timing1d(work1,nfft_both,1);
     fft1->timing1d(work1,nfft_both,1);
@@ -2434,6 +2564,7 @@ int PPPMDipole::timing_1d(int n, double &time1d)
     fft2->timing1d(work1,nfft_both,-1);
     fft2->timing1d(work1,nfft_both,-1);
   }
+  #endif
 
   MPI_Barrier(world);
   time2 = MPI_Wtime();
@@ -2455,6 +2586,22 @@ int PPPMDipole::timing_3d(int n, double &time3d)
   MPI_Barrier(world);
   time1 = MPI_Wtime();
 
+  #ifdef FFT_HEFFTE
+  for (int i = 0; i < n; i++) {
+    fft1->forward(reinterpret_cast<std::complex<double>*>(work1),reinterpret_cast<std::complex<double>*>(work1));
+    fft1->forward(reinterpret_cast<std::complex<double>*>(work1),reinterpret_cast<std::complex<double>*>(work1));
+    fft1->forward(reinterpret_cast<std::complex<double>*>(work1),reinterpret_cast<std::complex<double>*>(work1));
+    fft2->backward(reinterpret_cast<std::complex<double>*>(work1),reinterpret_cast<std::complex<double>*>(work1));
+    fft2->backward(reinterpret_cast<std::complex<double>*>(work1),reinterpret_cast<std::complex<double>*>(work1));
+    fft2->backward(reinterpret_cast<std::complex<double>*>(work1),reinterpret_cast<std::complex<double>*>(work1));
+    fft2->backward(reinterpret_cast<std::complex<double>*>(work1),reinterpret_cast<std::complex<double>*>(work1));
+    fft2->backward(reinterpret_cast<std::complex<double>*>(work1),reinterpret_cast<std::complex<double>*>(work1));
+    fft2->backward(reinterpret_cast<std::complex<double>*>(work1),reinterpret_cast<std::complex<double>*>(work1));
+    fft2->backward(reinterpret_cast<std::complex<double>*>(work1),reinterpret_cast<std::complex<double>*>(work1));
+    fft2->backward(reinterpret_cast<std::complex<double>*>(work1),reinterpret_cast<std::complex<double>*>(work1));
+    fft2->backward(reinterpret_cast<std::complex<double>*>(work1),reinterpret_cast<std::complex<double>*>(work1));
+  }
+  #else
   for (int i = 0; i < n; i++) {
     fft1->compute(work1,work1,1);
     fft1->compute(work1,work1,1);
@@ -2469,6 +2616,7 @@ int PPPMDipole::timing_3d(int n, double &time3d)
     fft2->compute(work1,work1,-1);
     fft2->compute(work1,work1,-1);
   }
+  #endif
 
   MPI_Barrier(world);
   time2 = MPI_Wtime();
