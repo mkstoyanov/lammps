@@ -93,6 +93,9 @@ PPPMKokkos<DeviceType>::PPPMKokkos(LAMMPS *lmp) : PPPM(lmp)
   fft1 = fft2 = nullptr;
   remap = nullptr;
   gc = nullptr;
+  #ifdef FFT_HEFFTE
+  hfft1 = hfft2 = nullptr;
+  #endif
 
   nmax = 0;
   //part2grid = nullptr;
@@ -828,6 +831,19 @@ void PPPMKokkos<DeviceType>::allocate()
                           nxlo_fft,nxhi_fft,nylo_fft,nyhi_fft,nzlo_fft,nzhi_fft,
                           1,0,0,FFT_PRECISION,collective_flag,gpu_aware_flag);
 
+#ifdef FFT_HEFFTE
+  heffte::plan_options options = heffte::default_options<typename heffte_map<DeviceType>::backend>();
+  options.use_alltoall = false;
+  hfft1 = new heffte::fft3d<typename heffte_map<DeviceType>::backend>(
+                heffte::box3d({nxlo_fft,nylo_fft,nzlo_fft}, {nxhi_fft, nyhi_fft, nzhi_fft}),
+                heffte::box3d({nxlo_fft,nylo_fft,nzlo_fft}, {nxhi_fft, nyhi_fft, nzhi_fft}),
+                world, options);
+  hfft2 = new heffte::fft3d<typename heffte_map<DeviceType>::backend>(
+                heffte::box3d({nxlo_fft, nylo_fft, nzlo_fft}, {nxhi_fft, nyhi_fft, nzhi_fft}),
+                heffte::box3d({nxlo_in, nylo_in, nzlo_in}, {nxhi_in, nyhi_in, nzhi_in}),
+                world, options);
+#endif
+
   // create ghost grid object for rho and electric field communication
   // also create 2 bufs for ghost grid cell comm, passed to GridComm methods
 
@@ -864,9 +880,16 @@ void PPPMKokkos<DeviceType>::deallocate()
   delete fft2;
   fft2 = nullptr;
   delete remap;
+
   remap = nullptr;
   delete gc;
   gc = nullptr;
+
+  #ifdef FFT_HEFFTE
+  if (hfft1 != nullptr) delete hfft1;
+  if (hfft2 != nullptr) delete hfft2;
+  hfft1 = hfft2 = nullptr;
+  #endif
 }
 
 /* ----------------------------------------------------------------------
@@ -2854,12 +2877,25 @@ int PPPMKokkos<DeviceType>::timing_3d(int n, double &time3d)
   MPI_Barrier(world);
   time1 = MPI_Wtime();
 
+#ifdef FFT_HEFFTE
+  std::complex<FFT_SCALAR>* hwork = reinterpret_cast<std::complex<FFT_SCALAR>*>(d_work1.data());
+  size_t sizew = std::max(hfft1->size_workspace(), hfft2->size_workspace());
+  typename heffte::fft3d<typename heffte_map<DeviceType>::backend>::buffer_container<std::complex<FFT_SCALAR>> workspace(sizew);
+
+  for (int i = 0; i < n; i++) {
+    hfft1->forward(hwork, hwork, workspace.data());
+    hfft2->backward(hwork, hwork, workspace.data());
+    hfft2->backward(hwork, hwork, workspace.data());
+    hfft2->backward(hwork, hwork, workspace.data());
+  }
+#else
   for (int i = 0; i < n; i++) {
     fft1->compute(d_work1,d_work1,1);
     fft2->compute(d_work1,d_work1,-1);
     fft2->compute(d_work1,d_work1,-1);
     fft2->compute(d_work1,d_work1,-1);
   }
+#endif
 
   MPI_Barrier(world);
   time2 = MPI_Wtime();

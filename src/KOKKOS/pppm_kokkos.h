@@ -46,6 +46,18 @@ KSpaceStyle(pppm/kk/host,PPPMKokkos<LMPHostType>)
 # endif
 #endif
 
+#ifdef FFT_HEFFTE
+#include "heffte.h"
+  template<typename> struct heffte_map{
+      using backend = heffte::backend::fftw;
+  };
+#ifdef FFT_HEFFTE_CUDA
+  template<> struct heffte_map<Kokkos::Cuda>{
+      using backend = heffte::backend::cufft;
+  };
+#endif
+#endif
+
 #include "pppm.h"
 
 namespace LAMMPS_NS {
@@ -362,6 +374,10 @@ class PPPMKokkos : public PPPM, public KokkosBaseFFT {
 
   FFT_DAT::tdual_FFT_SCALAR_1d k_gc_buf1,k_gc_buf2;
   int ngc_buf1,ngc_buf2,npergrid;
+
+#ifdef FFT_HEFFTE
+  heffte::fft3d<typename heffte_map<DeviceType>::backend> *hfft1, *hfft2;
+#endif
 
   //int **part2grid;             // storage for particle -> grid mapping
   typename AT::t_int_1d_3 d_part2grid;
