@@ -118,6 +118,10 @@ PPPM::PPPM(LAMMPS *lmp) : KSpace(lmp),
   gc = nullptr;
   gc_buf1 = gc_buf2 = nullptr;
 
+#ifdef FFT_HEFFTE
+  hfft1 = hfft2 = nullptr;
+#endif
+
   nmax = 0;
   part2grid = nullptr;
 
@@ -812,6 +816,19 @@ void PPPM::allocate()
                     nxlo_fft,nxhi_fft,nylo_fft,nyhi_fft,nzlo_fft,nzhi_fft,
                     1,0,0,FFT_PRECISION,collective_flag);
 
+#ifdef FFT_HEFFTE
+  heffte::plan_options options = heffte::default_options<heffte::backend::fftw>();
+  options.use_alltoall = false;
+  hfft1 = new heffte::fft3d<heffte::backend::fftw>(
+                heffte::box3d({nxlo_fft,nylo_fft,nzlo_fft}, {nxhi_fft, nyhi_fft, nzhi_fft}),
+                heffte::box3d({nxlo_fft,nylo_fft,nzlo_fft}, {nxhi_fft, nyhi_fft, nzhi_fft}),
+                world, options);
+  hfft2 = new heffte::fft3d<heffte::backend::fftw>(
+                heffte::box3d({nxlo_fft, nylo_fft, nzlo_fft}, {nxhi_fft, nyhi_fft, nzhi_fft}),
+                heffte::box3d({nxlo_in, nylo_in, nzlo_in}, {nxhi_in, nyhi_in, nzhi_in}),
+                world, options);
+#endif
+
   // create ghost grid object for rho and electric field communication
   // also create 2 bufs for ghost grid cell comm, passed to GridComm methods
 
@@ -879,6 +896,12 @@ void PPPM::deallocate()
   delete gc;
   memory->destroy(gc_buf1);
   memory->destroy(gc_buf2);
+
+#ifdef FFT_HEFFTE
+  if (hfft1 != nullptr) delete hfft1;
+  if (hfft2 != nullptr) delete hfft2;
+  hfft1 = hfft2 = nullptr;
+#endif
 }
 
 /* ----------------------------------------------------------------------
@@ -3031,6 +3054,20 @@ int PPPM::timing_3d(int n, double &time3d)
   MPI_Barrier(world);
   time1 = MPI_Wtime();
 
+#ifdef FFT_HEFFTE
+  std::complex<FFT_SCALAR>* hwork = reinterpret_cast<std::complex<FFT_SCALAR>*>(work1);
+  size_t sizew = std::max(hfft1->size_workspace(), hfft2->size_workspace());
+  typename heffte::fft3d<heffte::backend::fftw>::buffer_container<std::complex<FFT_SCALAR>> workspace(sizew);
+
+  for (int i = 0; i < n; i++) {
+    hfft1->forward(hwork, hwork, workspace.data());
+    hfft2->backward(hwork, hwork, workspace.data());
+    if (differentiation_flag != 1) {
+      hfft2->backward(hwork, hwork, workspace.data());
+      hfft2->backward(hwork, hwork, workspace.data());
+    }
+  }
+#else
   for (int i = 0; i < n; i++) {
     fft1->compute(work1,work1,1);
     fft2->compute(work1,work1,-1);
@@ -3039,6 +3076,7 @@ int PPPM::timing_3d(int n, double &time3d)
       fft2->compute(work1,work1,-1);
     }
   }
+#endif
 
   MPI_Barrier(world);
   time2 = MPI_Wtime();

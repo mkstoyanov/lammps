@@ -43,6 +43,10 @@ typedef double FFT_SCALAR;
 #define MPI_FFT_SCALAR MPI_DOUBLE
 #endif
 
+#ifdef FFT_HEFFTE
+#include "heffte.h"
+#endif
+
 namespace LAMMPS_NS {
 
 class PPPM : public KSpace {
@@ -101,6 +105,10 @@ class PPPM : public KSpace {
   class FFT3d *fft1,*fft2;
   class Remap *remap;
   class GridComm *gc;
+
+#ifdef FFT_HEFFTE
+  heffte::fft3d<heffte::backend::fftw> *hfft1, *hfft2;
+#endif
 
   FFT_SCALAR *gc_buf1,*gc_buf2;
   int ngc_buf1,ngc_buf2,npergrid;
